@@ -1,0 +1,251 @@
+#include <stdio.h>
+#include <stdbool.h>
+#include <string.h>
+#include <stdlib.h>
+
+#define SIZE 8
+
+char board[SIZE][SIZE] = {
+    {'r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'},
+    {'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'},
+    {'.', '.', '.', '.', '.', '.', '.', '.'},
+    {'.', '.', '.', '.', '.', '.', '.', '.'},
+    {'.', '.', '.', '.', '.', '.', '.', '.'},
+    {'.', '.', '.', '.', '.', '.', '.', '.'},
+    {'P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'},
+    {'R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'}
+};
+
+int lastMoveSrcRow = -1, lastMoveSrcCol = -1, lastMoveDestRow = -1, lastMoveDestCol = -1;
+
+void printBoard();
+bool isValidMove(const char *move, char player);
+void makeMove(const char *move);
+bool isPathClear(int srcRow, int srcCol, int destRow, int destCol);
+bool isValidPieceMove(char piece, int srcRow, int srcCol, int destRow, int destCol);
+bool isKingInCheck(char player);
+bool canPlayerMove(char player);
+
+int main() {
+    char player = 'W';
+    char move[10];
+
+    while (true) {
+        printBoard();
+        if (isKingInCheck(player)) {
+            printf("Player %c is in check.\n", player);
+            if (!canPlayerMove(player)) {
+                printf("Player %c is checkmated. Game over.\n", player);
+                break;
+            }
+        } else if (!canPlayerMove(player)) {
+            printf("Player %c has no valid moves. Stalemate.\n", player);
+            break;
+        }
+
+        printf("Player %c, enter your move (e.g., 2e 4e): ", player);
+        if (!fgets(move, sizeof(move), stdin)) {
+            printf("Error reading input. Exiting.\n");
+            break;
+        }
+        move[strcspn(move, "\n")] = '\0';   
+
+        if (isValidMove(move, player)) {
+            makeMove(move);
+            player = (player == 'W') ? 'B' : 'W';
+        } else {
+            printf("Invalid move. Try again.\n");
+        }
+    }
+
+    return 0;
+}
+
+void printBoard() {
+    system("cls");
+    printf("\n");
+    for (int i = 0; i < SIZE; i++) {
+        printf("%d ", SIZE - i);
+        for (int j = 0; j < SIZE; j++) {
+            printf(" %c", board[i][j]);
+        }
+        printf("\n");
+    }
+    printf("   a b c d e f g h\n\n");
+}
+
+bool isValidMove(const char *move, char player) {
+    if (strlen(move) != 5 || move[2] != ' ') return false;
+
+    int srcRow = SIZE - (move[1] - '0');
+    int srcCol = move[0] - 'a';
+    int destRow = SIZE - (move[4] - '0');
+    int destCol = move[3] - 'a';
+
+    if (srcRow < 0 || srcRow >= SIZE || srcCol < 0 || srcCol >= SIZE ||
+        destRow < 0 || destRow >= SIZE || destCol < 0 || destCol >= SIZE)
+        return false;
+
+    char piece = board[srcRow][srcCol];
+    if ((player == 'W' && (piece < 'A' || piece > 'Z')) ||
+        (player == 'B' && (piece < 'a' || piece > 'z')))
+        return false;
+
+    char target = board[destRow][destCol];
+    if ((player == 'W' && target >= 'A' && target <= 'Z') ||
+        (player == 'B' && target >= 'a' && target <= 'z'))
+        return false;
+
+    if (!isValidPieceMove(piece, srcRow, srcCol, destRow, destCol))
+        return false;
+
+    if (!isPathClear(srcRow, srcCol, destRow, destCol) && piece != 'N' && piece != 'n')
+        return false;
+
+    char temp = board[destRow][destCol];
+    board[destRow][destCol] = piece;
+    board[srcRow][srcCol] = '.';
+    bool isCheck = isKingInCheck(player);
+    board[srcRow][srcCol] = piece;
+    board[destRow][destCol] = temp;
+
+    if (isCheck) return false;
+
+    return true;
+}
+
+void makeMove(const char *move) {
+    int srcRow = SIZE - (move[1] - '0');
+    int srcCol = move[0] - 'a';
+    int destRow = SIZE - (move[4] - '0');
+    int destCol = move[3] - 'a';
+
+    if ((board[srcRow][srcCol] == 'P' || board[srcRow][srcCol] == 'p') &&
+        abs(destCol - srcCol) == 1 && board[destRow][destCol] == '.') {
+        board[lastMoveDestRow][lastMoveDestCol] = '.';
+    }
+
+    board[destRow][destCol] = board[srcRow][srcCol];
+    board[srcRow][srcCol] = '.';
+
+    lastMoveSrcRow = srcRow;
+    lastMoveSrcCol = srcCol;
+    lastMoveDestRow = destRow;
+    lastMoveDestCol = destCol;
+}
+
+bool isPathClear(int srcRow, int srcCol, int destRow, int destCol) {
+    int rowStep = (destRow > srcRow) ? 1 : (destRow < srcRow) ? -1 : 0;
+    int colStep = (destCol > srcCol) ? 1 : (destCol < srcCol) ? -1 : 0;
+
+    int currentRow = srcRow + rowStep;
+    int currentCol = srcCol + colStep;
+
+    while (currentRow != destRow || currentCol != destCol) {
+        if (board[currentRow][currentCol] != '.')
+            return false;
+        currentRow += rowStep;
+        currentCol += colStep;
+    }
+
+    return true;
+}
+
+bool isValidPieceMove(char piece, int srcRow, int srcCol, int destRow, int destCol) {
+    int rowDiff = destRow - srcRow;
+    int colDiff = destCol - srcCol;
+
+    switch (piece) {
+        case 'P':
+            if (srcRow == 6 && rowDiff == -2 && colDiff == 0 && board[destRow][destCol] == '.')
+                return true;
+            if (rowDiff == -1 && colDiff == 0 && board[destRow][destCol] == '.')
+                return true;
+            if (rowDiff == -1 && abs(colDiff) == 1 && board[destRow][destCol] >= 'a' && board[destRow][destCol] <= 'z')
+                return true;
+            if (rowDiff == -1 && abs(colDiff) == 1 &&
+                destRow == lastMoveDestRow && destCol == lastMoveDestCol &&
+                board[lastMoveSrcRow][lastMoveSrcCol] == 'p' && lastMoveSrcRow == 1 && lastMoveDestRow == 3)
+                return true;
+            break;
+        case 'p':
+            if (srcRow == 1 && rowDiff == 2 && colDiff == 0 && board[destRow][destCol] == '.')
+                return true;
+            if (rowDiff == 1 && colDiff == 0 && board[destRow][destCol] == '.')
+                return true;
+            if (rowDiff == 1 && abs(colDiff) == 1 && board[destRow][destCol] >= 'A' && board[destRow][destCol] <= 'Z')
+                return true;
+            if (rowDiff == 1 && abs(colDiff) == 1 &&
+                destRow == lastMoveDestRow && destCol == lastMoveDestCol &&
+                board[lastMoveSrcRow][lastMoveSrcCol] == 'P' && lastMoveSrcRow == 6 && lastMoveDestRow == 4)
+                return true;
+            break;
+        case 'R':
+        case 'r':
+            return (rowDiff == 0 || colDiff == 0);
+        case 'B':
+        case 'b':
+            return abs(rowDiff) == abs(colDiff);
+        case 'Q':
+        case 'q':
+            return (rowDiff == 0 || colDiff == 0 || abs(rowDiff) == abs(colDiff));
+        case 'N':
+        case 'n':
+            return (abs(rowDiff) == 2 && abs(colDiff) == 1) || (abs(rowDiff) == 1 && abs(colDiff) == 2);
+        case 'K':
+        case 'k':
+            return abs(rowDiff) <= 1 && abs(colDiff) <= 1;
+    }
+
+    return false;
+}
+
+bool isKingInCheck(char player) {
+    int kingRow = -1, kingCol = -1;
+    char king = (player == 'W') ? 'K' : 'k';
+
+    for (int i = 0; i < SIZE; i++) {
+        for (int j = 0; j < SIZE; j++) {
+            if (board[i][j] == king) {
+                kingRow = i;
+                kingCol = j;
+                break;
+            }
+        }
+    }
+
+    char opponent = (player == 'W') ? 'B' : 'W';
+    for (int i = 0; i < SIZE; i++) {
+        for (int j = 0; j < SIZE; j++) {
+            if ((opponent == 'W' && board[i][j] >= 'A' && board[i][j] <= 'Z') ||
+                (opponent == 'B' && board[i][j] >= 'a' && board[i][j] <= 'z')) {
+                if (isValidPieceMove(board[i][j], i, j, kingRow, kingCol) && isPathClear(i, j, kingRow, kingCol)) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+bool canPlayerMove(char player) {
+    for (int i = 0; i < SIZE; i++) {
+        for (int j = 0; j < SIZE; j++) {
+            char piece = board[i][j];
+            if ((player == 'W' && piece >= 'A' && piece <= 'Z') ||
+                (player == 'B' && piece >= 'a' && piece <= 'z')) {
+                for (int destRow = 0; destRow < SIZE; destRow++) {
+                    for (int destCol = 0; destCol < SIZE; destCol++) {
+                        char move[6];
+                        snprintf(move, sizeof(move), "%c%d %c%d", 'a' + j, SIZE - i, 'a' + destCol, SIZE - destRow);
+                        if (isValidMove(move, player)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
